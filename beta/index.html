@@ -5,15 +5,22 @@ header{background:#fff;border-bottom:1px solid #E5E7EB}header div,main{max-width
 header div{font-weight:800;font-size:20px}header span{color:#1F6FEB}.card{background:#fff;border:1px solid #E5E7EB;border-radius:14px;padding:22px 24px;margin:20px 0}
 h1{font-size:28px;margin:.2em 0}.pill{display:inline-block;padding:3px 10px;border-radius:9px;background:#EEF2FF;color:#3730A3;font-size:13px;font-weight:700}
 .btn{display:inline-block;background:#1F6FEB;color:#fff;border-radius:10px;padding:13px 22px;font-weight:700;text-decoration:none;margin:6px 8px 0 0}
-.alt{background:#fff;color:#111827;border:1px solid #D1D5DB}.muted{color:#6B7280}</style></head><body>
-<header><div>LithoShape<span>3D</span></div></header><main><div class=card><span class=pill>PROGRAMME BÊTA — VERSION 1.0 RC3</span>
+.alt{background:#fff;color:#111827;border:1px solid #D1D5DB}.muted{color:#6B7280}.lang{float:right;font-size:14px;font-weight:600}
+.en{display:none}body.en .en{display:block}body.en .fr{display:none}</style></head><body>
+<header><div>LithoShape<span>3D</span><span class=lang><a href="#" onclick="setLang('fr');return false">FR</a> | <a href="#" onclick="setLang('en');return false">EN</a></span></div></header>
+<main><div class="card fr"><span class=pill>PROGRAMME BÊTA — VERSION 1.0 RC3</span>
 <h1>Devenir bêta-testeur</h1>
-<p>LithoShape3D approche de sa version 1.0. Je recherche quelques utilisateurs motivés pour tester sérieusement cette
-Release Candidate avant la sortie publique.</p>
-<p><b>LithoShape3D</b> transforme vos photos en objets lumineux prêts à imprimer en 3D : lithophanies plates ou en arc,
-LithoSphere, LithoClock, LithoBox, LithoLetters et formes personnalisées, sur Windows et Mac.</p>
-<p>Une <b>Release Candidate</b> est une version presque finale : la RC3 peut encore contenir des bugs. Le but est de
-vraiment tester le logiciel (si possible en imprimant), de signaler les problèmes et de retester les corrections.</p>
+<p>LithoShape3D approche de sa version 1.0. Je recherche quelques utilisateurs motivés pour tester sérieusement cette Release Candidate avant la sortie publique.</p>
+<p><b>LithoShape3D</b> transforme vos photos en objets lumineux prêts à imprimer en 3D : lithophanies plates ou en arc, LithoSphere, LithoClock, LithoBox, LithoLetters et formes personnalisées, sur Windows et Mac.</p>
+<p>Une <b>Release Candidate</b> est une version presque finale : la RC3 peut encore contenir des bugs. Le but est de vraiment tester le logiciel (si possible en imprimant), de signaler les problèmes et de retester les corrections.</p>
 <p class=muted>Le nombre de places est limité. Une candidature ne garantit pas automatiquement l'accès.</p>
-<p><a class=btn href="https://records-licence-saints-sol.trycloudflare.com/beta/candidature">DEVENIR BÊTA-TESTEUR</a><a class="btn alt" href="https://records-licence-saints-sol.trycloudflare.com/beta/connexion">Déjà testeur : mon espace</a></p>
-</div></main></body></html>
+<p><a class=btn href="https://records-licence-saints-sol.trycloudflare.com/beta/candidature?lang=fr">DEVENIR BÊTA-TESTEUR</a><a class="btn alt" href="https://records-licence-saints-sol.trycloudflare.com/beta/connexion?lang=fr">Déjà testeur : mon espace</a></p></div>
+<div class="card en"><span class=pill>BETA PROGRAM — VERSION 1.0 RC3</span>
+<h1>Become a beta tester</h1>
+<p>LithoShape3D is getting close to version 1.0. I'm looking for a few motivated users to seriously test this Release Candidate before the public release.</p>
+<p><b>LithoShape3D</b> turns your photos into light objects ready for 3D printing: flat or arched lithophanes, LithoSphere, LithoClock, LithoBox, LithoLetters and custom shapes, on Windows and Mac.</p>
+<p>A <b>Release Candidate</b> is an almost-final version: RC3 may still contain bugs. The goal is to really test the software (printing if possible), report problems and retest the fixes.</p>
+<p class=muted>Places are limited. Applying does not automatically guarantee access.</p>
+<p><a class=btn href="https://records-licence-saints-sol.trycloudflare.com/beta/candidature?lang=en">BECOME A BETA TESTER</a><a class="btn alt" href="https://records-licence-saints-sol.trycloudflare.com/beta/connexion?lang=en">Already a tester: my area</a></p></div></main>
+<script>function setLang(l){try{localStorage.setItem('ls3d_lang',l)}catch(e){}document.body.className=l==='en'?'en':'';document.documentElement.lang=l}
+var l='fr';try{l=localStorage.getItem('ls3d_lang')||(location.hash==='#en'?'en':'fr')}catch(e){}setLang(l)</script></body></html>
