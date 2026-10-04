@@ -1,0 +1,210 @@
+name: Build LithoShape3D (Windows + macOS)
+
+# Builds the apps from the PRIVATE source repo (le-belge/LithoShape3D) on the
+# free runners of this PUBLIC repo. The source code is never published:
+#   - it is fetched with a read-only token (secret SOURCE_REPO_TOKEN) and only
+#     lives on the runner for the duration of the job;
+#   - only the installers/apps leave the runner (artifacts, and the Release
+#     when `publish_tag` is given) -- exactly what this repo already offers;
+#   - manual trigger only (workflow_dispatch: people with write access to
+#     this repo), never on a pull request: the secret cannot leak to a fork.
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: "Branch or tag of the source repo (e.g. beta5, v1.0.0-rc8)"
+        required: true
+        default: "beta5"
+      platforms:
+        description: "Platforms to build"
+        type: choice
+        options: [all, windows, macos]
+        default: all
+      publish_tag:
+        description: "Release tag to publish the files to (e.g. v1.0.0-rc8). Empty = test build (artifacts only)."
+        required: false
+        default: ""
+
+permissions:
+  contents: write  # publication sur les Releases de CE depot (GITHUB_TOKEN)
+
+concurrency:
+  group: build-${{ inputs.source_ref }}
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    if: inputs.platforms == 'all' || inputs.platforms == 'windows'
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: le-belge/LithoShape3D
+          ref: ${{ inputs.source_ref }}
+          token: ${{ secrets.SOURCE_REPO_TOKEN }}
+          persist-credentials: false  # le jeton ne reste pas dans .git/config
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -c packaging/constraints-windows.txt -e .[app,dev] pyinstaller
+
+      - name: Run core test suite (headless, no Qt/PyVista)
+        run: pytest tests/core -q
+
+      - name: Build Windows executable
+        working-directory: packaging
+        run: pyinstaller lithoshape3d_windows.spec --noconfirm
+
+      - name: Smoke test - executable starts, printable export refused without license
+        shell: pwsh
+        run: |
+          python -c "from PIL import Image; Image.new('L', (64, 64), 128).save('smoke_test.png')"
+          $env:USERPROFILE = (New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\ls3d-home").FullName
+          $proc = Start-Process -FilePath ".\packaging\dist\LithoShape3D\LithoShape3D.exe" `
+            -ArgumentList "generate", "smoke_test.png", "smoke_test.stl", "--width", "20" `
+            -NoNewWindow -Wait -PassThru
+          if ($proc.ExitCode -ne 3) { throw "generate sans licence : code $($proc.ExitCode) (3 attendu)" }
+          if (Test-Path smoke_test.stl) { throw "STL ecrit sans licence" }
+          Write-Host "OK : build Windows fonctionnel, export imprimable refuse sans licence"
+
+      - name: Determine app version
+        id: version
+        shell: pwsh
+        run: |
+          $version = (python -c "import sys; sys.path.insert(0, 'src'); import lithoshape3d; print(lithoshape3d.__version__)")
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Build installers (full + patch)
+        working-directory: packaging
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" lithoshape3d_installer.iss /DAppVersion=${{ steps.version.outputs.version }}
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" lithoshape3d_patch_installer.iss /DAppVersion=${{ steps.version.outputs.version }}
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: LithoShape3D-Windows-installer
+          path: packaging/dist_installer/LithoShape3D-Setup-${{ steps.version.outputs.version }}.exe
+          retention-days: 14
+
+      - name: Upload patch artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: LithoShape3D-Windows-patch
+          path: packaging/dist_patch/LithoShape3D-Patch-${{ steps.version.outputs.version }}.exe
+          retention-days: 14
+
+      - name: Publish to the Release
+        if: inputs.publish_tag != ''
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.publish_tag }}
+        run: |
+          $installer = "packaging\dist_installer\LithoShape3D-Setup-${{ steps.version.outputs.version }}.exe"
+          $patch = "packaging\dist_patch\LithoShape3D-Patch-${{ steps.version.outputs.version }}.exe"
+          gh release view $env:TAG --repo $env:GITHUB_REPOSITORY *> $null
+          if ($LASTEXITCODE -ne 0) {
+            $flags = @()
+            if ($env:TAG -match "-(beta|rc)") { $flags += "--prerelease" }
+            gh release create $env:TAG --repo $env:GITHUB_REPOSITORY --title $env:TAG --notes "Build automatique (CI) pour $env:TAG." @flags
+          }
+          gh release upload $env:TAG $installer $patch --clobber --repo $env:GITHUB_REPOSITORY
+
+  macos:
+    if: inputs.platforms == 'all' || inputs.platforms == 'macos'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: AppleSilicon
+          - runner: macos-15-intel
+            arch: Intel
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: le-belge/LithoShape3D
+          ref: ${{ inputs.source_ref }}
+          token: ${{ secrets.SOURCE_REPO_TOKEN }}
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # meme pile 3D figee que Windows (vtk / pyvista / pyvistaqt / PySide6)
+          cp packaging/constraints-windows.txt "$RUNNER_TEMP/constraints.txt"
+          if [ "${{ matrix.arch }}" = "Intel" ]; then
+            # Mac Intel : onnxruntime, llvmlite et numba n'y sont plus publies
+            # dans les versions figees -> dernieres versions Intel ; numpy suit.
+            grep -v -E '^(onnxruntime|llvmlite|numba|numpy|cryptography)==' packaging/constraints-windows.txt > "$RUNNER_TEMP/constraints.txt"
+            printf '%s\n' 'onnxruntime<=1.23.2' 'llvmlite<=0.45.1' 'numba<=0.62.1' 'cryptography<=48.0.1' >> "$RUNNER_TEMP/constraints.txt"
+          fi
+          pip install -c "$RUNNER_TEMP/constraints.txt" -e ".[app-full,dev]" pyinstaller 2>&1 | tee "$RUNNER_TEMP/pip.log"
+          # une bibliotheque recompilee ici peut planter dans l'app : on refuse
+          rebuilt=$(grep -o 'Building wheel for [^ ]*' "$RUNNER_TEMP/pip.log" | grep -v 'for lithoshape3d' || true)
+          if [ -n "$rebuilt" ]; then echo "Recompile depuis les sources : $rebuilt"; exit 1; fi
+
+      - name: Run core test suite (headless, no Qt/PyVista)
+        run: pytest tests/core -q
+
+      - name: Build LithoShape3D.app
+        working-directory: packaging
+        run: pyinstaller lithoshape3d.spec --noconfirm
+
+      - name: Smoke test - app starts, printable export refused without license
+        run: |
+          python -c "from PIL import Image; Image.new('L', (64, 64), 128).save('smoke_test.png')"
+          export HOME="$RUNNER_TEMP/ls3d-home" && mkdir -p "$HOME"
+          set +e
+          ./packaging/dist/LithoShape3D.app/Contents/MacOS/LithoShape3D generate smoke_test.png smoke_test.stl --width 20
+          code=$?
+          set -e
+          if [ "$code" -ne 3 ]; then echo "generate sans licence : code $code (3 attendu)"; exit 1; fi
+          if [ -e smoke_test.stl ]; then echo "STL ecrit sans licence"; exit 1; fi
+          echo "OK : app macOS ${{ matrix.arch }} fonctionnelle, export imprimable refuse sans licence"
+
+      - name: Zip the app
+        id: zip
+        run: |
+          version=$(python -c "import sys; sys.path.insert(0, 'src'); import lithoshape3d; print(lithoshape3d.__version__)")
+          name="LithoShape3D-${version}-$(git rev-parse --short=7 HEAD)-macOS-${{ matrix.arch }}.zip"
+          ditto -c -k --sequesterRsrc --keepParent packaging/dist/LithoShape3D.app "$name"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          ls -lh "$name"
+
+      - name: Upload app artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: LithoShape3D-macOS-${{ matrix.arch }}
+          path: ${{ steps.zip.outputs.name }}
+          retention-days: 14
+
+      - name: Publish to the Release
+        if: inputs.publish_tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.publish_tag }}
+        run: |
+          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            flags=""
+            case "$TAG" in *-beta*|*-rc*) flags="--prerelease" ;; esac
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "$TAG" \
+              --notes "Build automatique (CI) pour $TAG." $flags || true
+          fi
+          gh release upload "$TAG" "${{ steps.zip.outputs.name }}" --clobber --repo "$GITHUB_REPOSITORY"
