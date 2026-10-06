@@ -20,6 +20,10 @@ on:
         type: choice
         options: [all, windows, macos]
         default: all
+      expected_sha:
+        description: "SHA complet attendu du source (garantit que Windows + macOS ARM + Intel sont construits du MEME commit). Vide = pas de verification."
+        required: false
+        default: ""
       publish_tag:
         description: "Release tag to publish the files to (e.g. v1.0.0-rc8). Empty = test build (artifacts only)."
         required: false
@@ -53,6 +57,14 @@ jobs:
           path: ci
           sparse-checkout: .github/scripts
           persist-credentials: false
+
+      - name: Verify source commit
+        if: inputs.expected_sha != ''
+        shell: pwsh
+        run: |
+          $sha = (git rev-parse HEAD).Trim()
+          if (-not $sha.StartsWith("${{ inputs.expected_sha }}")) { throw "SHA source $sha != attendu ${{ inputs.expected_sha }}" }
+          Write-Host "Source verifie : $sha"
 
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
@@ -173,6 +185,12 @@ jobs:
           path: ci
           sparse-checkout: .github/scripts
           persist-credentials: false
+
+      - name: Verify source commit
+        if: inputs.expected_sha != ''
+        run: |
+          sha=$(git rev-parse HEAD)
+          case "$sha" in "${{ inputs.expected_sha }}"*) echo "Source verifie : $sha" ;; *) echo "SHA source $sha != attendu ${{ inputs.expected_sha }}"; exit 1 ;; esac
 
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
