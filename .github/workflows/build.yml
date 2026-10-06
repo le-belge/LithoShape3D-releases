@@ -25,8 +25,11 @@ on:
         required: false
         default: ""
 
+# Permissions minimales par defaut : les jobs de build ne peuvent rien ecrire.
+# Seul le job `publish` (en bas) a `contents: write`, et il ne voit jamais le
+# code source : il ne recoit que les artifacts, verifies par le garde-fou.
 permissions:
-  contents: write  # publication sur les Releases de CE depot (GITHUB_TOKEN)
+  contents: read
 
 concurrency:
   group: build-${{ inputs.source_ref }}
@@ -38,14 +41,20 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: le-belge/LithoShape3D
           ref: ${{ inputs.source_ref }}
           token: ${{ secrets.SOURCE_REPO_TOKEN }}
           persist-credentials: false  # le jeton ne reste pas dans .git/config
 
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          path: ci
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
 
@@ -80,6 +89,9 @@ jobs:
           $version = (python -c "import sys; sys.path.insert(0, 'src'); import lithoshape3d; print(lithoshape3d.__version__)")
           echo "version=$version" >> $env:GITHUB_OUTPUT
 
+      - name: Guard - bundle must not contain source/secrets
+        run: python ci/.github/scripts/check_publish_guard.py packaging/dist/LithoShape3D
+
       - name: Install Inno Setup
         run: choco install innosetup --no-progress -y
 
@@ -89,36 +101,22 @@ jobs:
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" lithoshape3d_installer.iss /DAppVersion=${{ steps.version.outputs.version }}
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" lithoshape3d_patch_installer.iss /DAppVersion=${{ steps.version.outputs.version }}
 
+      - name: Guard - installers
+        run: python ci/.github/scripts/check_publish_guard.py packaging/dist_installer packaging/dist_patch
+
       - name: Upload installer artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: LithoShape3D-Windows-installer
           path: packaging/dist_installer/LithoShape3D-Setup-${{ steps.version.outputs.version }}.exe
           retention-days: 14
 
       - name: Upload patch artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: LithoShape3D-Windows-patch
           path: packaging/dist_patch/LithoShape3D-Patch-${{ steps.version.outputs.version }}.exe
           retention-days: 14
-
-      - name: Publish to the Release
-        if: inputs.publish_tag != ''
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ inputs.publish_tag }}
-        run: |
-          $installer = "packaging\dist_installer\LithoShape3D-Setup-${{ steps.version.outputs.version }}.exe"
-          $patch = "packaging\dist_patch\LithoShape3D-Patch-${{ steps.version.outputs.version }}.exe"
-          gh release view $env:TAG --repo $env:GITHUB_REPOSITORY *> $null
-          if ($LASTEXITCODE -ne 0) {
-            $flags = @()
-            if ($env:TAG -match "-(beta|rc)") { $flags += "--prerelease" }
-            gh release create $env:TAG --repo $env:GITHUB_REPOSITORY --title $env:TAG --notes "Build automatique (CI) pour $env:TAG." @flags
-          }
-          gh release upload $env:TAG $installer $patch --clobber --repo $env:GITHUB_REPOSITORY
 
   macos:
     if: inputs.platforms == 'all' || inputs.platforms == 'macos'
@@ -133,14 +131,20 @@ jobs:
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: le-belge/LithoShape3D
           ref: ${{ inputs.source_ref }}
           token: ${{ secrets.SOURCE_REPO_TOKEN }}
           persist-credentials: false
 
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          path: ci
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
 
@@ -179,6 +183,9 @@ jobs:
           if [ -e smoke_test.stl ]; then echo "STL ecrit sans licence"; exit 1; fi
           echo "OK : app macOS ${{ matrix.arch }} fonctionnelle, export imprimable refuse sans licence"
 
+      - name: Guard - bundle must not contain source/secrets
+        run: python ci/.github/scripts/check_publish_guard.py packaging/dist/LithoShape3D.app
+
       - name: Zip the app
         id: zip
         run: |
@@ -188,15 +195,39 @@ jobs:
           echo "name=$name" >> "$GITHUB_OUTPUT"
           ls -lh "$name"
 
+      - name: Guard - zip
+        run: python ci/.github/scripts/check_publish_guard.py "${{ steps.zip.outputs.name }}"
+
       - name: Upload app artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: LithoShape3D-macOS-${{ matrix.arch }}
           path: ${{ steps.zip.outputs.name }}
           retention-days: 14
 
+  publish:
+    # Seul job avec droit d'ecriture. N'a PAS acces au depot source ni a
+    # SOURCE_REPO_TOKEN : il ne manipule que les artifacts des jobs de build.
+    needs: [windows, macos]
+    if: ${{ !cancelled() && inputs.publish_tag != '' && !contains(needs.*.result, 'failure') && (needs.windows.result == 'success' || needs.macos.result == 'success') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write  # publication sur les Releases de CE depot uniquement
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          path: dist-artifacts
+
+      - name: Guard - re-check everything that is about to be published
+        run: python3 .github/scripts/check_publish_guard.py $(find dist-artifacts -type f)
+
       - name: Publish to the Release
-        if: inputs.publish_tag != ''
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.publish_tag }}
@@ -205,6 +236,6 @@ jobs:
             flags=""
             case "$TAG" in *-beta*|*-rc*) flags="--prerelease" ;; esac
             gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "$TAG" \
-              --notes "Build automatique (CI) pour $TAG." $flags || true
+              --notes "Build automatique (CI) pour $TAG." $flags
           fi
-          gh release upload "$TAG" "${{ steps.zip.outputs.name }}" --clobber --repo "$GITHUB_REPOSITORY"
+          find dist-artifacts -type f -print0 | xargs -0 gh release upload "$TAG" --clobber --repo "$GITHUB_REPOSITORY"
