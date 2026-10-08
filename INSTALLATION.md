@@ -9,9 +9,9 @@ Aucune photo ni donnée n'est envoyée sur internet.
 
 ---
 
-## 🍎 Mac (Apple Silicon : M1, M2, M3, M4)
+## 🍎 Mac (Apple Silicon : M1 à M4, ou Intel)
 
-1. Téléchargez le fichier `LithoShape3D-macOS-….zip`, puis double-cliquez dessus pour le décompresser.
+1. Téléchargez le fichier `LithoShape3D-…-macOS-AppleSilicon.zip` (puces M1 à M4) ou `…-macOS-Intel.zip` (Mac Intel), puis double-cliquez dessus pour le décompresser.
 2. Glissez **LithoShape3D** dans le dossier **Applications**.
 3. Double-cliquez sur LithoShape3D.
    Un message indique qu'Apple ne peut pas vérifier l'application : cliquez sur **OK** (ou **Terminé**).
@@ -49,6 +49,8 @@ Autorisez LithoShape3D dans votre antivirus, ou signalez-le-nous.
 
 Ouvrez le menu **Aide → Licence**, collez la clé reçue par e-mail, puis validez.
 Tout le reste est gratuit à essayer : la licence ne sert qu'à **créer les fichiers d'impression**.
+Clé perdue ? Demandez-en une nouvelle depuis la [page du programme](https://le-belge.github.io/LithoShape3D-releases/beta/) (bouton « Clé perdue ? »).
+Pour tout message au support, indiquez le **code de support** affiché dans Aide → Licence (il n'est pas secret).
 
 ## 🧠 Option : détourage automatique des photos
 
