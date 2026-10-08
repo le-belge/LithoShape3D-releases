@@ -20,13 +20,20 @@ on:
         type: choice
         options: [all, windows, macos]
         default: all
+      expected_sha:
+        description: "SHA complet attendu du source (garantit que Windows + macOS ARM + Intel sont construits du MEME commit). Vide = pas de verification."
+        required: false
+        default: ""
       publish_tag:
         description: "Release tag to publish the files to (e.g. v1.0.0-rc8). Empty = test build (artifacts only)."
         required: false
         default: ""
 
+# Permissions minimales par defaut : les jobs de build ne peuvent rien ecrire.
+# Seul le job `publish` (en bas) a `contents: write`, et il ne voit jamais le
+# code source : il ne recoit que les artifacts, verifies par le garde-fou.
 permissions:
-  contents: write  # publication sur les Releases de CE depot (GITHUB_TOKEN)
+  contents: read
 
 concurrency:
   group: build-${{ inputs.source_ref }}
@@ -38,14 +45,28 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: le-belge/LithoShape3D
           ref: ${{ inputs.source_ref }}
           token: ${{ secrets.SOURCE_REPO_TOKEN }}
           persist-credentials: false  # le jeton ne reste pas dans .git/config
 
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          path: ci
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+
+      - name: Verify source commit
+        if: inputs.expected_sha != ''
+        shell: pwsh
+        run: |
+          $sha = (git rev-parse HEAD).Trim()
+          if (-not $sha.StartsWith("${{ inputs.expected_sha }}")) { throw "SHA source $sha != attendu ${{ inputs.expected_sha }}" }
+          Write-Host "Source verifie : $sha"
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
 
@@ -80,6 +101,25 @@ jobs:
           $version = (python -c "import sys; sys.path.insert(0, 'src'); import lithoshape3d; print(lithoshape3d.__version__)")
           echo "version=$version" >> $env:GITHUB_OUTPUT
 
+      # --- Signature Authenticode : DESACTIVEE (variable de depot WIN_SIGN_ENABLED != 'true') ---
+      # Activation future : definir la variable WIN_SIGN_ENABLED=true et les secrets
+      # WIN_CERT_PFX_B64 + WIN_CERT_PASSWORD. Les secrets ne sont exposes qu'a cette etape.
+      - name: Sign Windows executable (Authenticode, disabled by default)
+        if: ${{ vars.WIN_SIGN_ENABLED == 'true' }}
+        shell: pwsh
+        env:
+          WIN_CERT_PFX_B64: ${{ secrets.WIN_CERT_PFX_B64 }}
+          WIN_CERT_PASSWORD: ${{ secrets.WIN_CERT_PASSWORD }}
+        run: |
+          $pfx = Join-Path $env:RUNNER_TEMP "cert.pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WIN_CERT_PFX_B64))
+          $signtool = (Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName | Select-Object -Last 1).FullName
+          & $signtool sign /f $pfx /p $env:WIN_CERT_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 packaging\dist\LithoShape3D\LithoShape3D.exe
+          Remove-Item $pfx -Force
+
+      - name: Guard - bundle must not contain source/secrets
+        run: python ci/.github/scripts/check_publish_guard.py packaging/dist/LithoShape3D
+
       - name: Install Inno Setup
         run: choco install innosetup --no-progress -y
 
@@ -89,36 +129,36 @@ jobs:
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" lithoshape3d_installer.iss /DAppVersion=${{ steps.version.outputs.version }}
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" lithoshape3d_patch_installer.iss /DAppVersion=${{ steps.version.outputs.version }}
 
+      - name: Sign Windows installers (Authenticode, disabled by default)
+        if: ${{ vars.WIN_SIGN_ENABLED == 'true' }}
+        shell: pwsh
+        env:
+          WIN_CERT_PFX_B64: ${{ secrets.WIN_CERT_PFX_B64 }}
+          WIN_CERT_PASSWORD: ${{ secrets.WIN_CERT_PASSWORD }}
+        run: |
+          $pfx = Join-Path $env:RUNNER_TEMP "cert.pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WIN_CERT_PFX_B64))
+          $signtool = (Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName | Select-Object -Last 1).FullName
+          Get-ChildItem packaging\dist_installer\*.exe, packaging\dist_patch\*.exe | ForEach-Object {
+            & $signtool sign /f $pfx /p $env:WIN_CERT_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 $_.FullName }
+          Remove-Item $pfx -Force
+
+      - name: Guard - installers
+        run: python ci/.github/scripts/check_publish_guard.py packaging/dist_installer packaging/dist_patch
+
       - name: Upload installer artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: LithoShape3D-Windows-installer
           path: packaging/dist_installer/LithoShape3D-Setup-${{ steps.version.outputs.version }}.exe
           retention-days: 14
 
       - name: Upload patch artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: LithoShape3D-Windows-patch
           path: packaging/dist_patch/LithoShape3D-Patch-${{ steps.version.outputs.version }}.exe
           retention-days: 14
-
-      - name: Publish to the Release
-        if: inputs.publish_tag != ''
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ inputs.publish_tag }}
-        run: |
-          $installer = "packaging\dist_installer\LithoShape3D-Setup-${{ steps.version.outputs.version }}.exe"
-          $patch = "packaging\dist_patch\LithoShape3D-Patch-${{ steps.version.outputs.version }}.exe"
-          gh release view $env:TAG --repo $env:GITHUB_REPOSITORY *> $null
-          if ($LASTEXITCODE -ne 0) {
-            $flags = @()
-            if ($env:TAG -match "-(beta|rc)") { $flags += "--prerelease" }
-            gh release create $env:TAG --repo $env:GITHUB_REPOSITORY --title $env:TAG --notes "Build automatique (CI) pour $env:TAG." @flags
-          }
-          gh release upload $env:TAG $installer $patch --clobber --repo $env:GITHUB_REPOSITORY
 
   macos:
     if: inputs.platforms == 'all' || inputs.platforms == 'macos'
@@ -133,14 +173,26 @@ jobs:
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: le-belge/LithoShape3D
           ref: ${{ inputs.source_ref }}
           token: ${{ secrets.SOURCE_REPO_TOKEN }}
           persist-credentials: false
 
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          path: ci
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+
+      - name: Verify source commit
+        if: inputs.expected_sha != ''
+        run: |
+          sha=$(git rev-parse HEAD)
+          case "$sha" in "${{ inputs.expected_sha }}"*) echo "Source verifie : $sha" ;; *) echo "SHA source $sha != attendu ${{ inputs.expected_sha }}"; exit 1 ;; esac
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
 
@@ -179,6 +231,36 @@ jobs:
           if [ -e smoke_test.stl ]; then echo "STL ecrit sans licence"; exit 1; fi
           echo "OK : app macOS ${{ matrix.arch }} fonctionnelle, export imprimable refuse sans licence"
 
+      # --- Developer ID + notarisation : DESACTIVEES (variable de depot MACOS_SIGN_ENABLED != 'true') ---
+      # Secrets requis a l'activation : MACOS_CERT_P12_B64, MACOS_CERT_PASSWORD, MACOS_SIGN_IDENTITY,
+      # APPLE_ID, APPLE_TEAM_ID, APPLE_APP_PASSWORD. Exposes uniquement a cette etape.
+      - name: Sign + notarize macOS app (disabled by default)
+        if: ${{ vars.MACOS_SIGN_ENABLED == 'true' }}
+        env:
+          MACOS_CERT_P12_B64: ${{ secrets.MACOS_CERT_P12_B64 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          kc="$RUNNER_TEMP/build.keychain"; pw="$(uuidgen)"
+          security create-keychain -p "$pw" "$kc"; security set-keychain-settings -lut 3600 "$kc"
+          security unlock-keychain -p "$pw" "$kc"
+          echo "$MACOS_CERT_P12_B64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -P "$MACOS_CERT_PASSWORD" -A -t cert -f pkcs12 -k "$kc"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$pw" "$kc" >/dev/null
+          security list-keychains -d user -s "$kc" login.keychain
+          app=packaging/dist/LithoShape3D.app
+          codesign --force --deep --options runtime --timestamp --sign "$MACOS_SIGN_IDENTITY" "$app"
+          ditto -c -k --keepParent "$app" "$RUNNER_TEMP/notarize.zip"
+          xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait
+          xcrun stapler staple "$app"
+          rm -f "$RUNNER_TEMP/cert.p12"; security delete-keychain "$kc"
+
+      - name: Guard - bundle must not contain source/secrets
+        run: python ci/.github/scripts/check_publish_guard.py packaging/dist/LithoShape3D.app
+
       - name: Zip the app
         id: zip
         run: |
@@ -188,15 +270,39 @@ jobs:
           echo "name=$name" >> "$GITHUB_OUTPUT"
           ls -lh "$name"
 
+      - name: Guard - zip
+        run: python ci/.github/scripts/check_publish_guard.py "${{ steps.zip.outputs.name }}"
+
       - name: Upload app artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: LithoShape3D-macOS-${{ matrix.arch }}
           path: ${{ steps.zip.outputs.name }}
           retention-days: 14
 
+  publish:
+    # Seul job avec droit d'ecriture. N'a PAS acces au depot source ni a
+    # SOURCE_REPO_TOKEN : il ne manipule que les artifacts des jobs de build.
+    needs: [windows, macos]
+    if: ${{ !cancelled() && inputs.publish_tag != '' && !contains(needs.*.result, 'failure') && (needs.windows.result == 'success' || needs.macos.result == 'success') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write  # publication sur les Releases de CE depot uniquement
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          path: dist-artifacts
+
+      - name: Guard - re-check everything that is about to be published
+        run: python3 .github/scripts/check_publish_guard.py $(find dist-artifacts -type f)
+
       - name: Publish to the Release
-        if: inputs.publish_tag != ''
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.publish_tag }}
@@ -205,6 +311,6 @@ jobs:
             flags=""
             case "$TAG" in *-beta*|*-rc*) flags="--prerelease" ;; esac
             gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "$TAG" \
-              --notes "Build automatique (CI) pour $TAG." $flags || true
+              --notes "Build automatique (CI) pour $TAG." $flags
           fi
-          gh release upload "$TAG" "${{ steps.zip.outputs.name }}" --clobber --repo "$GITHUB_REPOSITORY"
+          find dist-artifacts -type f -print0 | xargs -0 gh release upload "$TAG" --clobber --repo "$GITHUB_REPOSITORY"
