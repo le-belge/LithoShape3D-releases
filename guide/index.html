@@ -1,0 +1,93 @@
+<!doctype html><html lang=fr><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+<title>Guide — LithoShape3D</title>
+<style>body{margin:0;font:16px/1.65 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111827;background:#F5F7FB}
+header{background:#fff;border-bottom:1px solid #E5E7EB}header div,main{max-width:860px;margin:auto;padding:14px 18px}
+header div{font-weight:800;font-size:20px}header span{color:#1F6FEB}.lang{float:right;font-size:14px;font-weight:600}
+.card{background:#fff;border:1px solid #E5E7EB;border-radius:14px;padding:22px 26px;margin:20px 0}
+h1{font-size:26px;margin:.2em 0}h2{font-size:20px;margin:1.4em 0 .3em}h3{font-size:16px;margin:1.1em 0 .2em}
+code{background:#EEF2FF;padding:1px 6px;border-radius:5px}.note{background:#FEF3C7;border-radius:10px;padding:10px 14px}
+nav a{margin-right:14px;font-weight:600;color:#1F6FEB;text-decoration:none}.en{display:none}body.en .en{display:block}body.en .fr{display:none}
+li{margin:.25em 0}</style></head><body>
+<header><div>LithoShape<span>3D</span><span class=lang><a href="#" onclick="setLang('fr');return false">FR</a> | <a href="#" onclick="setLang('en');return false">EN</a></span></div></header>
+<main>
+<nav class=fr><a href="#installation">Installation</a><a href="#utilisation">Mode d'emploi</a><a href="#licence">Licence</a><a href="#aide">Aide</a></nav>
+<nav class=en><a href="#installation-en">Installation</a><a href="#utilisation-en">User guide</a><a href="#licence-en">License</a><a href="#aide-en">Help</a></nav>
+
+<div class="card fr">
+<h1 id=installation>Installation en 1 minute</h1>
+<p>LithoShape3D fonctionne <b>entièrement sur votre ordinateur</b> : aucune photo n'est envoyée sur internet. Le logiciel n'est pas encore signé auprès d'Apple et de Microsoft : un avertissement s'affiche au <b>premier lancement seulement</b>. C'est normal.</p>
+<p>Téléchargement : <a href="https://github.com/le-belge/LithoShape3D-releases/releases/latest">dernière version</a>.</p>
+<h3>Windows 10 / 11</h3>
+<ol><li>Téléchargez <code>LithoShape3D-Setup-….exe</code> et double-cliquez dessus.</li>
+<li>Si l'écran bleu « Windows a protégé votre ordinateur » apparaît : <b>Informations complémentaires</b>, puis <b>Exécuter quand même</b>.</li>
+<li>Suivez l'installation (Suivant → Installer → Terminer). Si votre antivirus bloque le fichier, c'est une fausse alerte fréquente avec les logiciels non signés : autorisez-le.</li></ol>
+<h3>Mac (Apple Silicon M1 à M4, ou Intel)</h3>
+<ol><li>Téléchargez le fichier <code>…macOS-AppleSilicon.zip</code> (puces M1 à M4) ou <code>…macOS-Intel.zip</code> (Mac Intel), puis double-cliquez pour le décompresser.</li>
+<li>Glissez <b>LithoShape3D</b> dans <b>Applications</b>, puis double-cliquez dessus. Un message indique qu'Apple ne peut pas vérifier l'application : cliquez sur <b>OK</b>.</li>
+<li>Ouvrez <b>Réglages Système → Confidentialité et sécurité</b>, descendez en bas et cliquez sur <b>Ouvrir quand même</b> (mot de passe ou Touch ID).</li></ol>
+<p class=note>Si macOS dit « endommagé et ne peut pas être ouvert » : ouvrez Terminal et collez <code>xattr -dr com.apple.quarantine /Applications/LithoShape3D.app</code>, puis relancez.</p>
+</div>
+
+<div class="card fr">
+<h1 id=utilisation>Mode d'emploi</h1>
+<h2>Le principe</h2>
+<ol><li>Sur l'accueil, choisissez une création : <b>Lithophanie</b> (panneau plat, arc ou cylindre), <b>LithoSphere</b> (sphère lumineuse) ou <b>LithoClock</b> (horloge).</li>
+<li>Ajoutez votre photo (glisser-déposer ou bouton). Pour un meilleur résultat, choisissez une image bien contrastée.</li>
+<li>Réglez la taille, l'épaisseur et la forme. L'aperçu 3D se met à jour.</li>
+<li>Cliquez sur <b>Allumé</b> pour voir le rendu rétro-éclairé, puis sur <b>Aperçu 3D</b> pour revenir à la vue normale. <b>Vue éclatée</b> écarte les pièces pour voir l'assemblage ; <b>Plein écran</b> agrandit l'aperçu.</li>
+<li>Exportez les fichiers (STL, ou 3MF pour plusieurs couleurs) et ouvrez-les dans votre trancheur (Bambu Studio, OrcaSlicer, PrusaSlicer, Cura…).</li></ol>
+<h2>Les créations</h2>
+<ul><li><b>Lithophanie</b> : plus l'image est sombre, plus la matière est épaisse et laisse passer peu de lumière.</li>
+<li><b>LithoSphere</b> : une ou plusieurs photos sur une sphère. Le logiciel indique le format d'image conseillé. Le côté de l'image est <b>Extérieur</b> par défaut ; vous pouvez le changer dans les réglages avancés.</li>
+<li><b>LithoClock</b> : une photo et des chiffres, avec boîtier et cadre. L'aperçu montre l'horloge assemblée.</li>
+<li><b>À plat · couleurs</b> (depuis Lithophanie et LithoClock) : aplats de 2 à 4 couleurs imprimés à plat, un filament par couleur (jusqu'aux 4 emplacements d'un AMS), sans support.</li></ul>
+<h2>Conseils</h2>
+<ul><li>Essayez toujours l'aperçu <b>Allumé</b> avant d'imprimer.</li>
+<li>Les réglages avancés se trouvent dans <b>Options avancées</b> (menu ⚙ en haut à droite) ; le bouton « Restaurer les réglages recommandés » revient aux valeurs par défaut.</li>
+<li>Le détourage automatique d'une photo télécharge une fois un modèle d'environ 180 Mo, puis fonctionne hors ligne.</li></ul>
+<h2 id=licence>Licence</h2>
+<p>Tout est gratuit à essayer, y compris l'aperçu. La licence ne sert qu'à <b>créer les fichiers d'impression</b>. Menu <b>Aide → Licence</b> : collez la clé reçue par e-mail et validez. <b>Clé perdue ?</b> demandez-en une nouvelle depuis la <a href="../beta/">page du programme</a>. Le <b>code de support</b> affiché dans Aide → Licence n'est pas secret : donnez-le avec votre demande.</p>
+<h2 id=aide>Besoin d'aide</h2>
+<p>Menu <b>Aide → Signaler un problème</b>, ou l'onglet <a href="https://github.com/le-belge/LithoShape3D-releases/issues">Issues</a>. Précisez votre système (Windows ou Mac) et la version (Aide → À propos).</p>
+</div>
+
+<div class="card en">
+<h1 id=installation-en>Install in 1 minute</h1>
+<p>LithoShape3D runs <b>entirely on your computer</b>: no photo is sent over the internet. The software is not yet signed with Apple and Microsoft, so a warning appears on <b>first launch only</b>. This is expected.</p>
+<p>Download: <a href="https://github.com/le-belge/LithoShape3D-releases/releases/latest">latest version</a>.</p>
+<h3>Windows 10 / 11</h3>
+<ol><li>Download <code>LithoShape3D-Setup-….exe</code> and double-click it.</li>
+<li>If the blue "Windows protected your PC" screen appears: <b>More info</b>, then <b>Run anyway</b>.</li>
+<li>Follow the installer. If your antivirus blocks the file, it is a common false alarm for unsigned software: allow it.</li></ol>
+<h3>Mac (Apple Silicon M1–M4, or Intel)</h3>
+<ol><li>Download <code>…macOS-AppleSilicon.zip</code> (M1–M4) or <code>…macOS-Intel.zip</code> (Intel Mac) and unzip it.</li>
+<li>Drag <b>LithoShape3D</b> into <b>Applications</b> and open it. A message says Apple cannot verify the app: click <b>OK</b>.</li>
+<li>Open <b>System Settings → Privacy &amp; Security</b>, scroll down and click <b>Open Anyway</b>.</li></ol>
+<p class=note>If macOS says "damaged and can't be opened": open Terminal, paste <code>xattr -dr com.apple.quarantine /Applications/LithoShape3D.app</code>, then relaunch.</p>
+</div>
+
+<div class="card en">
+<h1 id=utilisation-en>User guide</h1>
+<h2>How it works</h2>
+<ol><li>On the home screen choose a creation: <b>Lithophane</b> (flat, arched or cylinder), <b>LithoSphere</b> (light sphere) or <b>LithoClock</b> (clock).</li>
+<li>Add your photo (drag and drop or button). A well-contrasted image gives the best result.</li>
+<li>Adjust size, thickness and shape. The 3D preview updates.</li>
+<li>Click <b>Lit</b> to see the backlit rendering, then <b>3D preview</b> to go back. <b>Exploded view</b> spreads the parts apart; <b>Full screen</b> enlarges the preview.</li>
+<li>Export the files (STL, or 3MF for several colours) and open them in your slicer (Bambu Studio, OrcaSlicer, PrusaSlicer, Cura…).</li></ol>
+<h2>Creations</h2>
+<ul><li><b>Lithophane</b>: the darker the image, the thicker the material and the less light passes through.</li>
+<li><b>LithoSphere</b>: one or several photos on a sphere. The software shows the recommended image format. The image side is <b>Outside</b> by default; change it in the advanced settings.</li>
+<li><b>LithoClock</b>: a photo and numerals, with case and frame. The preview shows the assembled clock.</li>
+<li><b>Flat · colours</b> (from Lithophane and LithoClock): 2 to 4 flat colours printed lying down, one filament per colour (up to the 4 slots of an AMS), no supports.</li></ul>
+<h2>Tips</h2>
+<ul><li>Always check the <b>Lit</b> preview before printing.</li>
+<li>Advanced settings are under <b>Advanced options</b> (⚙ menu, top right); "Restore recommended settings" returns to defaults.</li>
+<li>Automatic background removal downloads a ~180 MB model once, then works offline.</li></ul>
+<h2 id=licence-en>License</h2>
+<p>Everything is free to try, including the preview. The license is only needed to <b>create print files</b>. Menu <b>Help → License</b>: paste the key received by e-mail. <b>Lost your key?</b> request a new one from the <a href="../beta/">program page</a>. The <b>support code</b> shown in Help → License is not secret: include it in your request.</p>
+<h2 id=aide-en>Need help?</h2>
+<p>Menu <b>Help → Report a problem</b>, or the <a href="https://github.com/le-belge/LithoShape3D-releases/issues">Issues</a> tab. Mention your system (Windows or Mac) and the version (Help → About).</p>
+</div>
+</main>
+<script>function setLang(l){try{localStorage.setItem('ls3d_lang',l)}catch(e){}document.body.className=l==='en'?'en':'';document.documentElement.lang=l}
+var l='fr';try{l=localStorage.getItem('ls3d_lang')||'fr'}catch(e){}setLang(l)</script></body></html>
